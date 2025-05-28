@@ -1,0 +1,85 @@
+export type PlayerPosition = 'Forward' | 'Midfielder' | 'Defender' | 'Goalkeeper';
+
+export interface PlayerStats {
+  // Forward stats
+  finishing: number;
+  speed: number;
+  dribbling: number;
+  
+  // Midfielder stats
+  vision: number;
+  passing: number;
+  interception: number;
+  
+  // Defender stats
+  tackling: number;
+  clearance: number;
+  longPasses: number;
+  
+  // Goalkeeper stats
+  jumping: number;
+  reflex: number;
+  parrying: number;
+  
+  // Universal stats
+  stamina: number;
+  reputation: number;
+}
+
+export interface Player {
+  name: string;
+  position: PlayerPosition;
+  stats: PlayerStats;
+  matchesPlayed: number;
+  goals: number;
+  assists: number;
+  cleanSheets: number;
+}
+
+export interface GameEvent {
+  id: string;
+  description: string;
+  choices: string[];
+  successRate: (stat1: number, stat2?: number) => number;
+  impact: {
+    positive: number;
+    negative: number;
+  };
+}
+
+export interface Match {
+  id: number;
+  opponent: string;
+  homeTeam: string;
+  awayTeam: string;
+  homeScore: number;
+  awayScore: number;
+  isPlayerMatch: boolean;
+  completed: boolean;
+}
+
+export interface Season {
+  currentMatch: number;
+  matches: Match[];
+  leagueTable: TeamRecord[];
+}
+
+export interface TeamRecord {
+  team: string;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDifference: number;
+  points: number;
+}
+
+export interface GameState {
+  player: Player | null;
+  season: Season;
+  canTrain: boolean;
+  gamePhase: 'setup' | 'season' | 'match' | 'training' | 'results';
+  lastMatchEvents: GameEvent[];
+}
