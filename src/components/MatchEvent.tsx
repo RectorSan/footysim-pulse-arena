@@ -7,18 +7,34 @@ import { Card } from './ui/card';
 interface MatchEventProps {
   event: GameEvent;
   eventIndex: number;
+  currentEventIndex: number;
+  totalEvents: number;
   onChoice: (eventIndex: number, choiceIndex: number) => void;
-  resolved?: boolean;
 }
 
-const MatchEvent: React.FC<MatchEventProps> = ({ event, eventIndex, onChoice, resolved }) => {
-  if (resolved) return null;
+const MatchEvent: React.FC<MatchEventProps> = ({ 
+  event, 
+  eventIndex, 
+  currentEventIndex, 
+  totalEvents, 
+  onChoice 
+}) => {
+  // Only show if this is the current event and it's not resolved
+  if (eventIndex !== currentEventIndex || event.resolved) return null;
 
   return (
     <Card className="glass-card p-6 animate-fade-in">
       <div className="space-y-4">
         <div className="text-center">
-          <h3 className="text-lg font-semibold text-white mb-2">Match Event {eventIndex + 1}</h3>
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-sm text-gray-400">Match Event</span>
+            <span className="text-sm text-primary font-medium">
+              {eventIndex + 1} / {totalEvents}
+            </span>
+          </div>
+          <h3 className="text-lg font-semibold text-white mb-2">
+            Decision Time!
+          </h3>
           <p className="text-gray-300">{event.description}</p>
         </div>
         

@@ -5,9 +5,10 @@ import { Card } from './ui/card';
 
 interface LeagueTableProps {
   leagueTable: TeamRecord[];
+  playerTeam?: string;
 }
 
-const LeagueTable: React.FC<LeagueTableProps> = ({ leagueTable }) => {
+const LeagueTable: React.FC<LeagueTableProps> = ({ leagueTable, playerTeam }) => {
   return (
     <Card className="glass-card p-6">
       <h2 className="text-xl font-bold text-white mb-4">League Table</h2>
@@ -30,7 +31,7 @@ const LeagueTable: React.FC<LeagueTableProps> = ({ leagueTable }) => {
               <tr 
                 key={team.team} 
                 className={`border-b border-white/10 ${
-                  team.team === 'Your Team' ? 'bg-primary/10 text-primary' : 'text-white'
+                  team.team === playerTeam ? 'bg-primary/10 text-primary' : 'text-white'
                 }`}
               >
                 <td className="py-2 font-medium">{index + 1}</td>

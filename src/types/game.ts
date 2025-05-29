@@ -1,3 +1,4 @@
+
 export type PlayerPosition = 'Forward' | 'Midfielder' | 'Defender' | 'Goalkeeper';
 
 export interface PlayerStats {
@@ -36,6 +37,17 @@ export interface Player {
   cleanSheets: number;
 }
 
+export interface OpponentPlayer {
+  name: string;
+  position: PlayerPosition;
+  stats: PlayerStats;
+}
+
+export interface OpponentTeam {
+  name: string;
+  players: OpponentPlayer[];
+}
+
 export interface GameEvent {
   id: string;
   description: string;
@@ -45,6 +57,8 @@ export interface GameEvent {
     positive: number;
     negative: number;
   };
+  resolved?: boolean;
+  success?: boolean;
 }
 
 export interface Match {
@@ -56,6 +70,7 @@ export interface Match {
   awayScore: number;
   isPlayerMatch: boolean;
   completed: boolean;
+  opponentTeam?: OpponentTeam;
 }
 
 export interface Season {
@@ -78,8 +93,11 @@ export interface TeamRecord {
 
 export interface GameState {
   player: Player | null;
+  playerTeam: string;
   season: Season;
   canTrain: boolean;
   gamePhase: 'setup' | 'season' | 'match' | 'training' | 'results';
   lastMatchEvents: GameEvent[];
+  currentEventIndex: number;
+  opponentTeams: OpponentTeam[];
 }

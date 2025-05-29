@@ -1,6 +1,6 @@
 
 import { useState, useCallback } from 'react';
-import { GameState, Player, PlayerPosition, PlayerStats, Season, Match, TeamRecord, GameEvent } from '../types/game';
+import { GameState, Player, PlayerPosition, PlayerStats, Season, Match, TeamRecord, GameEvent, OpponentTeam, OpponentPlayer } from '../types/game';
 import { getEventsForPosition } from '../data/gameEvents';
 
 const TEAM_NAMES = [
@@ -9,6 +9,78 @@ const TEAM_NAMES = [
   'Crystal Palace', 'Fulham', 'Brentford', 'Wolves', 'Everton',
   'Nottingham Forest', 'Bournemouth', 'Sheffield United', 'Burnley', 'Luton Town'
 ];
+
+const PLAYER_NAMES = [
+  'Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis',
+  'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson',
+  'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin', 'Lee', 'Perez', 'Thompson'
+];
+
+const createRandomStats = (position: PlayerPosition): PlayerStats => {
+  const baseStats = {
+    finishing: 40 + Math.random() * 40,
+    speed: 40 + Math.random() * 40,
+    dribbling: 40 + Math.random() * 40,
+    vision: 40 + Math.random() * 40,
+    passing: 40 + Math.random() * 40,
+    interception: 40 + Math.random() * 40,
+    tackling: 40 + Math.random() * 40,
+    clearance: 40 + Math.random() * 40,
+    longPasses: 40 + Math.random() * 40,
+    jumping: 40 + Math.random() * 40,
+    reflex: 40 + Math.random() * 40,
+    parrying: 40 + Math.random() * 40,
+    stamina: 100,
+    reputation: 40 + Math.random() * 40
+  };
+
+  // Boost position-specific stats
+  switch (position) {
+    case 'Forward':
+      baseStats.finishing += 20;
+      baseStats.speed += 15;
+      baseStats.dribbling += 15;
+      break;
+    case 'Midfielder':
+      baseStats.vision += 20;
+      baseStats.passing += 20;
+      baseStats.interception += 15;
+      break;
+    case 'Defender':
+      baseStats.tackling += 20;
+      baseStats.clearance += 20;
+      baseStats.longPasses += 15;
+      break;
+    case 'Goalkeeper':
+      baseStats.jumping += 20;
+      baseStats.reflex += 20;
+      baseStats.parrying += 20;
+      break;
+  }
+
+  return baseStats;
+};
+
+const createOpponentPlayer = (position: PlayerPosition): OpponentPlayer => {
+  const randomName = PLAYER_NAMES[Math.floor(Math.random() * PLAYER_NAMES.length)];
+  return {
+    name: randomName,
+    position,
+    stats: createRandomStats(position)
+  };
+};
+
+const createOpponentTeam = (teamName: string): OpponentTeam => {
+  return {
+    name: teamName,
+    players: [
+      createOpponentPlayer('Forward'),
+      createOpponentPlayer('Midfielder'),
+      createOpponentPlayer('Defender'),
+      createOpponentPlayer('Goalkeeper')
+    ]
+  };
+};
 
 const createInitialStats = (position: PlayerPosition): PlayerStats => {
   const baseStats = {
@@ -34,24 +106,24 @@ const createInitialStats = (position: PlayerPosition): PlayerStats => {
   }
 };
 
-const createSeason = (): Season => {
+const createSeason = (playerTeam: string, opponentTeams: OpponentTeam[]): Season => {
   const matches: Match[] = [];
-  const playerTeam = 'Your Team';
   
   // Create 20 matches for the season
   for (let i = 0; i < 20; i++) {
-    const opponent = TEAM_NAMES[Math.floor(Math.random() * TEAM_NAMES.length)];
+    const opponentTeam = opponentTeams[Math.floor(Math.random() * opponentTeams.length)];
     const isHome = Math.random() > 0.5;
     
     matches.push({
       id: i + 1,
-      opponent,
-      homeTeam: isHome ? playerTeam : opponent,
-      awayTeam: isHome ? opponent : playerTeam,
+      opponent: opponentTeam.name,
+      homeTeam: isHome ? playerTeam : opponentTeam.name,
+      awayTeam: isHome ? opponentTeam.name : playerTeam,
       homeScore: 0,
       awayScore: 0,
       isPlayerMatch: true,
-      completed: false
+      completed: false,
+      opponentTeam
     });
   }
 
@@ -78,10 +150,13 @@ const createSeason = (): Season => {
 export const useGameState = () => {
   const [gameState, setGameState] = useState<GameState>({
     player: null,
-    season: createSeason(),
+    playerTeam: '',
+    season: { currentMatch: 0, matches: [], leagueTable: [] },
     canTrain: false,
     gamePhase: 'setup',
-    lastMatchEvents: []
+    lastMatchEvents: [],
+    currentEventIndex: 0,
+    opponentTeams: []
   });
 
   const createPlayer = useCallback((name: string, position: PlayerPosition) => {
@@ -95,9 +170,21 @@ export const useGameState = () => {
       cleanSheets: 0
     };
 
+    // Select a random team for the player
+    const playerTeam = TEAM_NAMES[Math.floor(Math.random() * TEAM_NAMES.length)];
+    
+    // Create opponent teams (exclude player's team)
+    const availableTeams = TEAM_NAMES.filter(team => team !== playerTeam);
+    const opponentTeams = availableTeams.map(teamName => createOpponentTeam(teamName));
+
+    const season = createSeason(playerTeam, opponentTeams);
+
     setGameState(prev => ({
       ...prev,
       player,
+      playerTeam,
+      season,
+      opponentTeams,
       gamePhase: 'season'
     }));
   }, []);
@@ -115,7 +202,7 @@ export const useGameState = () => {
     while (matchEvents.length < 2) {
       const randomEvent = positionEvents[Math.floor(Math.random() * positionEvents.length)];
       if (!usedEvents.has(randomEvent.id)) {
-        matchEvents.push(randomEvent);
+        matchEvents.push({ ...randomEvent, resolved: false });
         usedEvents.add(randomEvent.id);
       }
     }
@@ -123,7 +210,8 @@ export const useGameState = () => {
     setGameState(prev => ({
       ...prev,
       gamePhase: 'match',
-      lastMatchEvents: matchEvents
+      lastMatchEvents: matchEvents,
+      currentEventIndex: 0
     }));
   }, [gameState.player, gameState.season.currentMatch]);
 
@@ -132,48 +220,65 @@ export const useGameState = () => {
 
     const event = gameState.lastMatchEvents[eventIndex];
     const player = gameState.player;
+    const currentMatch = gameState.season.matches[gameState.season.currentMatch];
+    const opponentTeam = currentMatch.opponentTeam;
     
+    if (!opponentTeam) return;
+
     // Get relevant stats based on position
-    let stat1 = 50, stat2 = 50;
+    let playerStat1 = 50, playerStat2 = 50;
+    let opponentStat1 = 50, opponentStat2 = 50;
+    
+    const opponentPlayer = opponentTeam.players.find(p => p.position === player.position) || opponentTeam.players[0];
+    
     switch (player.position) {
       case 'Forward':
-        stat1 = player.stats.finishing;
-        stat2 = player.stats.speed;
+        playerStat1 = player.stats.finishing;
+        playerStat2 = player.stats.speed;
+        opponentStat1 = opponentPlayer.stats.tackling;
+        opponentStat2 = opponentPlayer.stats.clearance;
         break;
       case 'Midfielder':
-        stat1 = player.stats.vision;
-        stat2 = player.stats.passing;
+        playerStat1 = player.stats.vision;
+        playerStat2 = player.stats.passing;
+        opponentStat1 = opponentPlayer.stats.interception;
+        opponentStat2 = opponentPlayer.stats.tackling;
         break;
       case 'Defender':
-        stat1 = player.stats.tackling;
-        stat2 = player.stats.clearance;
+        playerStat1 = player.stats.tackling;
+        playerStat2 = player.stats.clearance;
+        opponentStat1 = opponentPlayer.stats.finishing;
+        opponentStat2 = opponentPlayer.stats.speed;
         break;
       case 'Goalkeeper':
-        stat1 = player.stats.reflex;
-        stat2 = player.stats.jumping;
+        playerStat1 = player.stats.reflex;
+        playerStat2 = player.stats.jumping;
+        opponentStat1 = opponentPlayer.stats.finishing;
+        opponentStat2 = opponentPlayer.stats.speed;
         break;
     }
 
-    const successRate = event.successRate(stat1, stat2);
+    // Calculate success rate based on player vs opponent stats
+    const playerStrength = (playerStat1 + playerStat2) / 2;
+    const opponentStrength = (opponentStat1 + opponentStat2) / 2;
+    const successRate = Math.max(10, Math.min(90, 50 + (playerStrength - opponentStrength) * 0.5));
+    
     const isSuccess = Math.random() * 100 < successRate;
     
-    // Store event result for match completion
+    // Update the specific event
     setGameState(prev => ({
       ...prev,
       lastMatchEvents: prev.lastMatchEvents.map((e, i) => 
         i === eventIndex ? { ...e, resolved: true, success: isSuccess } : e
-      )
+      ),
+      currentEventIndex: prev.currentEventIndex + 1
     }));
 
     // Check if all events are resolved
-    const allEventsResolved = gameState.lastMatchEvents.every((e, i) => 
-      i === eventIndex || (e as any).resolved
-    );
-
-    if (allEventsResolved) {
-      completeMatch();
+    if (gameState.currentEventIndex + 1 >= gameState.lastMatchEvents.length) {
+      setTimeout(() => completeMatch(), 1000);
     }
-  }, [gameState.player, gameState.lastMatchEvents]);
+  }, [gameState.player, gameState.lastMatchEvents, gameState.season, gameState.currentEventIndex]);
 
   const completeMatch = useCallback(() => {
     if (!gameState.player) return;
@@ -188,7 +293,7 @@ export const useGameState = () => {
     let playerScore = Math.floor(Math.random() * 3 + playerImpact);
     let opponentScore = Math.floor(Math.random() * 3 + (1 - playerImpact));
     
-    const isPlayerHome = currentMatch.homeTeam === 'Your Team';
+    const isPlayerHome = currentMatch.homeTeam === gameState.playerTeam;
     const finalHomeScore = isPlayerHome ? playerScore : opponentScore;
     const finalAwayScore = isPlayerHome ? opponentScore : playerScore;
 
@@ -221,7 +326,7 @@ export const useGameState = () => {
 
     // Update league table
     const updatedTable = gameState.season.leagueTable.map(record => {
-      if (record.team === 'Your Team') {
+      if (record.team === gameState.playerTeam) {
         const result = playerScore > opponentScore ? 'win' : 
                       playerScore < opponentScore ? 'loss' : 'draw';
         
@@ -252,9 +357,10 @@ export const useGameState = () => {
         leagueTable: updatedTable
       },
       canTrain: true,
-      gamePhase: 'results'
+      gamePhase: 'results',
+      currentEventIndex: 0
     }));
-  }, [gameState.player, gameState.season, gameState.lastMatchEvents]);
+  }, [gameState.player, gameState.season, gameState.lastMatchEvents, gameState.playerTeam]);
 
   const train = useCallback((statToImprove: keyof PlayerStats) => {
     if (!gameState.player || !gameState.canTrain) return;

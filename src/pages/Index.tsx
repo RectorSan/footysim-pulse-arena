@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useGameState } from '../hooks/useGameState';
 import PlayerSetup from '../components/PlayerSetup';
@@ -44,6 +43,9 @@ const Index = () => {
                     <h2 className="text-2xl font-bold text-white">
                       Season Progress: {gameState.season.currentMatch}/20
                     </h2>
+                    <div className="text-lg text-primary font-semibold">
+                      Playing for: {gameState.playerTeam}
+                    </div>
                     {gameState.season.currentMatch < 20 ? (
                       <div className="space-y-4">
                         <p className="text-gray-400">
@@ -61,7 +63,7 @@ const Index = () => {
                       <div className="space-y-4">
                         <h3 className="text-xl font-bold text-primary">Season Complete! 🏆</h3>
                         <p className="text-gray-400">
-                          Final Position: {gameState.season.leagueTable.findIndex(t => t.team === 'Your Team') + 1}
+                          Final Position: {gameState.season.leagueTable.findIndex(t => t.team === gameState.playerTeam) + 1}
                         </p>
                       </div>
                     )}
@@ -76,10 +78,27 @@ const Index = () => {
                       key={event.id}
                       event={event}
                       eventIndex={index}
+                      currentEventIndex={gameState.currentEventIndex}
+                      totalEvents={gameState.lastMatchEvents.length}
                       onChoice={resolveMatchEvent}
-                      resolved={(event as any).resolved}
                     />
                   ))}
+                  
+                  {/* Show completed events */}
+                  {gameState.lastMatchEvents.filter(e => e.resolved).length > 0 && (
+                    <Card className="glass-card p-4">
+                      <h4 className="text-white font-semibold mb-2">Previous Decisions:</h4>
+                      <div className="space-y-2">
+                        {gameState.lastMatchEvents.map((event, index) => 
+                          event.resolved ? (
+                            <div key={event.id} className="text-sm text-gray-400">
+                              Decision {index + 1}: {event.success ? '✅ Success' : '❌ Failed'}
+                            </div>
+                          ) : null
+                        )}
+                      </div>
+                    </Card>
+                  )}
                 </div>
               )}
 
@@ -99,7 +118,7 @@ const Index = () => {
                 />
               )}
 
-              <LeagueTable leagueTable={gameState.season.leagueTable} />
+              <LeagueTable leagueTable={gameState.season.leagueTable} playerTeam={gameState.playerTeam} />
             </div>
 
             {/* Sidebar */}
