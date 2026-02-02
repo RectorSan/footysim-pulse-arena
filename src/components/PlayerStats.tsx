@@ -70,7 +70,9 @@ const PlayerStats: React.FC<PlayerStatsProps> = ({ player }) => {
               <span>Matches: {player.matchesPlayed}</span>
               {player.position === 'Forward' && <span>Goals: {player.goals}</span>}
               {player.position === 'Midfielder' && <span>Assists: {player.assists}</span>}
-              {player.position === 'Goalkeeper' && <span>Clean Sheets: {player.cleanSheets}</span>}
+              {(player.position === 'Goalkeeper' || player.position === 'Defender') && (
+                <span>Clean Sheets: {player.cleanSheets}</span>
+              )}
             </div>
           </div>
         </div>

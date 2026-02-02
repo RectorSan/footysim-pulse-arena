@@ -8,11 +8,12 @@ import TrainingOptions from '../components/TrainingOptions';
 import LeagueTable from '../components/LeagueTable';
 import MessageTicker from '../components/MessageTicker';
 import TopBar from '../components/TopBar';
+import CareerManagement from '../components/CareerManagement';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 
 const Index = () => {
-  const { gameState, createPlayer, playMatch, resolveMatchEvent, train, rest } = useGameState();
+  const { gameState, createPlayer, playMatch, resolveMatchEvent, train, rest, manageCareer } = useGameState();
 
   const handlePlayMatch = () => {
     if (gameState.player && gameState.player.stats.stamina < 20) {
@@ -117,6 +118,12 @@ const Index = () => {
                   onRest={rest}
                 />
               )}
+
+              <CareerManagement
+                career={gameState.career}
+                player={gameState.player}
+                onAction={manageCareer}
+              />
 
               <LeagueTable leagueTable={gameState.season.leagueTable} playerTeam={gameState.playerTeam} />
             </div>
