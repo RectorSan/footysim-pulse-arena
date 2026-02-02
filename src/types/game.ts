@@ -35,6 +35,8 @@ export interface Player {
   goals: number;
   assists: number;
   cleanSheets: number;
+  age: number;
+  nationality: string;
 }
 
 export interface OpponentPlayer {
@@ -100,4 +102,39 @@ export interface GameState {
   lastMatchEvents: GameEvent[];
   currentEventIndex: number;
   opponentTeams: OpponentTeam[];
+  career: CareerState;
 }
+
+export interface CareerObjective {
+  label: string;
+  current: number;
+  target: number;
+  reward: number;
+  completed: boolean;
+}
+
+export interface ContractDetails {
+  weeklyWage: number;
+  yearsRemaining: number;
+  role: 'Prospect' | 'Rotation' | 'Starter' | 'Star';
+  releaseClause: number;
+}
+
+export interface FinanceOverview {
+  balance: number;
+  endorsements: number;
+  bonuses: number;
+  expenses: number;
+}
+
+export interface CareerState {
+  contract: ContractDetails;
+  finances: FinanceOverview;
+  marketValue: number;
+  fanSupport: number;
+  morale: number;
+  objectives: CareerObjective[];
+  transferInterest: 'Low' | 'Moderate' | 'High';
+}
+
+export type CareerAction = 'agentMeeting' | 'mediaDay' | 'sponsorship' | 'communityEvent';

@@ -1,6 +1,6 @@
 
 import { useState, useCallback } from 'react';
-import { GameState, Player, PlayerPosition, PlayerStats, Season, Match, TeamRecord, GameEvent, OpponentTeam, OpponentPlayer } from '../types/game';
+import { CareerAction, CareerObjective, CareerState, GameState, Player, PlayerPosition, PlayerStats, Season, Match, TeamRecord, GameEvent, OpponentTeam, OpponentPlayer } from '../types/game';
 import { getEventsForPosition } from '../data/gameEvents';
 
 const TEAM_NAMES = [
@@ -15,6 +15,13 @@ const PLAYER_NAMES = [
   'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson',
   'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin', 'Lee', 'Perez', 'Thompson'
 ];
+
+const NATIONALITIES = [
+  'England', 'Spain', 'France', 'Brazil', 'Argentina', 'Germany', 'Portugal',
+  'Italy', 'Netherlands', 'Nigeria', 'USA', 'Japan'
+];
+
+const CONTRACT_ROLES: CareerState['contract']['role'][] = ['Prospect', 'Rotation', 'Starter', 'Star'];
 
 const createRandomStats = (position: PlayerPosition): PlayerStats => {
   const baseStats = {
@@ -106,6 +113,117 @@ const createInitialStats = (position: PlayerPosition): PlayerStats => {
   }
 };
 
+const createObjectives = (position: PlayerPosition): CareerObjective[] => {
+  const commonObjectives = [
+    { label: 'Appearances', target: 15 },
+    { label: 'Fan support', target: 70 }
+  ];
+
+  const positionObjective = (() => {
+    switch (position) {
+      case 'Forward':
+        return { label: 'Goals', target: 12 };
+      case 'Midfielder':
+        return { label: 'Assists', target: 8 };
+      case 'Defender':
+        return { label: 'Clean sheets', target: 6 };
+      case 'Goalkeeper':
+        return { label: 'Clean sheets', target: 8 };
+      default:
+        return { label: 'Match influence', target: 10 };
+    }
+  })();
+
+  return [...commonObjectives, positionObjective].map((objective) => ({
+    ...objective,
+    current: 0,
+    reward: objective.target * 12000,
+    completed: false
+  }));
+};
+
+const calculateMarketValue = (stats: PlayerStats) => {
+  const coreStats = [
+    stats.finishing,
+    stats.speed,
+    stats.dribbling,
+    stats.vision,
+    stats.passing,
+    stats.interception,
+    stats.tackling,
+    stats.clearance,
+    stats.longPasses,
+    stats.jumping,
+    stats.reflex,
+    stats.parrying
+  ];
+  const average = coreStats.reduce((total, value) => total + value, 0) / coreStats.length;
+  return Math.round(1200000 + average * 60000 + stats.reputation * 25000);
+};
+
+const calculateTransferInterest = (reputation: number, marketValue: number) => {
+  if (reputation > 75 && marketValue > 6000000) {
+    return 'High';
+  }
+  if (reputation > 55 && marketValue > 3500000) {
+    return 'Moderate';
+  }
+  return 'Low';
+};
+
+const updateObjectives = (player: Player, career: CareerState) => {
+  let bonusBalance = 0;
+  let bonusReputation = 0;
+
+  const updatedObjectives = career.objectives.map((objective) => {
+    let currentValue = objective.current;
+
+    switch (objective.label) {
+      case 'Appearances':
+        currentValue = player.matchesPlayed;
+        break;
+      case 'Goals':
+        currentValue = player.goals;
+        break;
+      case 'Assists':
+        currentValue = player.assists;
+        break;
+      case 'Clean sheets':
+        currentValue = player.cleanSheets;
+        break;
+      case 'Fan support':
+        currentValue = career.fanSupport;
+        break;
+      default:
+        break;
+    }
+
+    const completed = currentValue >= objective.target;
+    if (completed && !objective.completed) {
+      bonusBalance += objective.reward;
+      bonusReputation += 2;
+    }
+
+    return {
+      ...objective,
+      current: currentValue,
+      completed: objective.completed || completed
+    };
+  });
+
+  const updatedCareer: CareerState = {
+    ...career,
+    objectives: updatedObjectives,
+    finances: {
+      ...career.finances,
+      balance: career.finances.balance + bonusBalance,
+      bonuses: career.finances.bonuses + bonusBalance
+    }
+  };
+
+  return { career: updatedCareer, bonusReputation };
+};
+
 const createSeason = (playerTeam: string, opponentTeams: OpponentTeam[]): Season => {
   const matches: Match[] = [];
   
@@ -156,10 +274,31 @@ export const useGameState = () => {
     gamePhase: 'setup',
     lastMatchEvents: [],
     currentEventIndex: 0,
-    opponentTeams: []
+    opponentTeams: [],
+    career: {
+      contract: {
+        weeklyWage: 0,
+        yearsRemaining: 0,
+        role: 'Prospect',
+        releaseClause: 0
+      },
+      finances: {
+        balance: 0,
+        endorsements: 0,
+        bonuses: 0,
+        expenses: 0
+      },
+      marketValue: 0,
+      fanSupport: 50,
+      morale: 60,
+      objectives: [],
+      transferInterest: 'Low'
+    }
   });
 
   const createPlayer = useCallback((name: string, position: PlayerPosition) => {
+    const age = 18 + Math.floor(Math.random() * 6);
+    const nationality = NATIONALITIES[Math.floor(Math.random() * NATIONALITIES.length)];
     const player: Player = {
       name,
       position,
@@ -167,7 +306,9 @@ export const useGameState = () => {
       matchesPlayed: 0,
       goals: 0,
       assists: 0,
-      cleanSheets: 0
+      cleanSheets: 0,
+      age,
+      nationality
     };
 
     // Select a random team for the player
@@ -178,6 +319,28 @@ export const useGameState = () => {
     const opponentTeams = availableTeams.map(teamName => createOpponentTeam(teamName));
 
     const season = createSeason(playerTeam, opponentTeams);
+    const marketValue = calculateMarketValue(player.stats);
+    const role = CONTRACT_ROLES[Math.min(CONTRACT_ROLES.length - 1, Math.floor(player.stats.reputation / 25))];
+    const weeklyWage = Math.round(4000 + player.stats.reputation * 250);
+    const career: CareerState = {
+      contract: {
+        weeklyWage,
+        yearsRemaining: 3,
+        role,
+        releaseClause: marketValue * 2
+      },
+      finances: {
+        balance: weeklyWage * 6,
+        endorsements: 0,
+        bonuses: 0,
+        expenses: 0
+      },
+      marketValue,
+      fanSupport: 45 + Math.round(player.stats.reputation / 2),
+      morale: 65,
+      objectives: createObjectives(position),
+      transferInterest: calculateTransferInterest(player.stats.reputation, marketValue)
+    };
 
     setGameState(prev => ({
       ...prev,
@@ -185,6 +348,7 @@ export const useGameState = () => {
       playerTeam,
       season,
       opponentTeams,
+      career,
       gamePhase: 'season'
     }));
   }, []);
@@ -305,13 +469,18 @@ export const useGameState = () => {
       completed: true
     };
 
+    const result = playerScore > opponentScore ? 'win' : playerScore < opponentScore ? 'loss' : 'draw';
+    const reputationBoost = (result === 'win' ? 2 : result === 'draw' ? 1 : -1) + (eventSuccesses > 0 ? 1 : 0);
+    const updatedReputation = Math.max(0, Math.min(100, gameState.player.stats.reputation + reputationBoost));
+
     // Update player stats
     const updatedPlayer = {
       ...gameState.player,
       matchesPlayed: gameState.player.matchesPlayed + 1,
       stats: {
         ...gameState.player.stats,
-        stamina: Math.max(0, gameState.player.stats.stamina - 20)
+        stamina: Math.max(0, gameState.player.stats.stamina - 20),
+        reputation: updatedReputation
       }
     };
 
@@ -322,14 +491,41 @@ export const useGameState = () => {
       updatedPlayer.assists += Math.floor(eventSuccesses / 2);
     } else if (gameState.player.position === 'Goalkeeper' && playerScore === 0) {
       updatedPlayer.cleanSheets += 1;
+    } else if (gameState.player.position === 'Defender' && opponentScore === 0) {
+      updatedPlayer.cleanSheets += 1;
     }
+
+    const fanSupportChange = result === 'win' ? 4 : result === 'draw' ? 1 : -3;
+    const moraleChange = result === 'win' ? 5 : result === 'draw' ? 1 : -4;
+    const baseMatchBonus = result === 'win' ? 12000 : result === 'draw' ? 6000 : 3000;
+    const baseCareer = {
+      ...gameState.career,
+      fanSupport: Math.max(0, Math.min(100, gameState.career.fanSupport + fanSupportChange)),
+      morale: Math.max(0, Math.min(100, gameState.career.morale + moraleChange)),
+      finances: {
+        ...gameState.career.finances,
+        balance: gameState.career.finances.balance + baseMatchBonus + gameState.career.contract.weeklyWage,
+        bonuses: gameState.career.finances.bonuses + baseMatchBonus
+      }
+    };
+    const initialMarketValue = calculateMarketValue(updatedPlayer.stats);
+    const careerWithValue = {
+      ...baseCareer,
+      marketValue: initialMarketValue,
+      transferInterest: calculateTransferInterest(updatedPlayer.stats.reputation, initialMarketValue)
+    };
+    const objectivesUpdate = updateObjectives(updatedPlayer, careerWithValue);
+    updatedPlayer.stats.reputation = Math.min(100, updatedPlayer.stats.reputation + objectivesUpdate.bonusReputation);
+    const finalMarketValue = calculateMarketValue(updatedPlayer.stats);
+    const careerAfterObjectives = {
+      ...objectivesUpdate.career,
+      marketValue: finalMarketValue,
+      transferInterest: calculateTransferInterest(updatedPlayer.stats.reputation, finalMarketValue)
+    };
 
     // Update league table
     const updatedTable = gameState.season.leagueTable.map(record => {
       if (record.team === gameState.playerTeam) {
-        const result = playerScore > opponentScore ? 'win' : 
-                      playerScore < opponentScore ? 'loss' : 'draw';
-        
         return {
           ...record,
           played: record.played + 1,
@@ -356,11 +552,12 @@ export const useGameState = () => {
         ),
         leagueTable: updatedTable
       },
+      career: careerAfterObjectives,
       canTrain: true,
       gamePhase: 'results',
       currentEventIndex: 0
     }));
-  }, [gameState.player, gameState.season, gameState.lastMatchEvents, gameState.playerTeam]);
+  }, [gameState.player, gameState.season, gameState.lastMatchEvents, gameState.playerTeam, gameState.career]);
 
   const train = useCallback((statToImprove: keyof PlayerStats) => {
     if (!gameState.player || !gameState.canTrain) return;
@@ -377,6 +574,15 @@ export const useGameState = () => {
     setGameState(prev => ({
       ...prev,
       player: updatedPlayer,
+      career: {
+        ...prev.career,
+        morale: Math.max(0, prev.career.morale - 2),
+        finances: {
+          ...prev.career.finances,
+          expenses: prev.career.finances.expenses + 1500,
+          balance: prev.career.finances.balance - 1500
+        }
+      },
       canTrain: false,
       gamePhase: 'season'
     }));
@@ -396,10 +602,85 @@ export const useGameState = () => {
     setGameState(prev => ({
       ...prev,
       player: updatedPlayer,
+      career: {
+        ...prev.career,
+        morale: Math.min(100, prev.career.morale + 6)
+      },
       canTrain: false,
       gamePhase: 'season'
     }));
   }, [gameState.player, gameState.canTrain]);
+
+  const manageCareer = useCallback((action: CareerAction) => {
+    if (!gameState.player) return;
+
+    setGameState(prev => {
+      if (!prev.player) return prev;
+
+      let reputationDelta = 0;
+      let fanSupportDelta = 0;
+      let moraleDelta = 0;
+      let balanceDelta = 0;
+      let endorsementDelta = 0;
+      let expenseDelta = 0;
+
+      switch (action) {
+        case 'agentMeeting':
+          reputationDelta += 1;
+          moraleDelta -= 2;
+          expenseDelta += 2500;
+          balanceDelta -= 2500;
+          break;
+        case 'mediaDay':
+          reputationDelta += 2;
+          fanSupportDelta += 3;
+          moraleDelta -= 1;
+          break;
+        case 'sponsorship':
+          endorsementDelta += 12000;
+          balanceDelta += 12000;
+          fanSupportDelta -= 1;
+          break;
+        case 'communityEvent':
+          reputationDelta += 1;
+          fanSupportDelta += 4;
+          moraleDelta += 2;
+          break;
+        default:
+          break;
+      }
+
+      const updatedReputation = Math.max(0, Math.min(100, prev.player.stats.reputation + reputationDelta));
+      const updatedStats = {
+        ...prev.player.stats,
+        reputation: updatedReputation
+      };
+      const updatedMarketValue = calculateMarketValue(updatedStats);
+
+      const updatedCareer: CareerState = {
+        ...prev.career,
+        fanSupport: Math.max(0, Math.min(100, prev.career.fanSupport + fanSupportDelta)),
+        morale: Math.max(0, Math.min(100, prev.career.morale + moraleDelta)),
+        marketValue: updatedMarketValue,
+        transferInterest: calculateTransferInterest(updatedReputation, updatedMarketValue),
+        finances: {
+          ...prev.career.finances,
+          balance: prev.career.finances.balance + balanceDelta,
+          endorsements: prev.career.finances.endorsements + endorsementDelta,
+          expenses: prev.career.finances.expenses + expenseDelta
+        }
+      };
+
+      return {
+        ...prev,
+        player: {
+          ...prev.player,
+          stats: updatedStats
+        },
+        career: updatedCareer
+      };
+    });
+  }, [gameState.player]);
 
   return {
     gameState,
@@ -407,6 +688,7 @@ export const useGameState = () => {
     playMatch,
     resolveMatchEvent,
     train,
-    rest
+    rest,
+    manageCareer
   };
 };
