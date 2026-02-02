@@ -61,6 +61,8 @@ export interface GameEvent {
   };
   resolved?: boolean;
   success?: boolean;
+  choiceIndex?: number;
+  impactValue?: number;
 }
 
 export interface Match {

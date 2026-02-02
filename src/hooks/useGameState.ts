@@ -23,6 +23,18 @@ const NATIONALITIES = [
 
 const CONTRACT_ROLES: CareerState['contract']['role'][] = ['Prospect', 'Rotation', 'Starter', 'Star'];
 
+const getChoiceProfile = (choiceIndex: number, totalChoices: number) => {
+  if (choiceIndex === 0) {
+    return { successBonus: 6, impactMultiplier: 1.2 };
+  }
+
+  if (choiceIndex === totalChoices - 1) {
+    return { successBonus: -4, impactMultiplier: 0.85 };
+  }
+
+  return { successBonus: 0, impactMultiplier: 1 };
+};
+
 const createRandomStats = (position: PlayerPosition): PlayerStats => {
   const baseStats = {
     finishing: 40 + Math.random() * 40,
@@ -359,11 +371,12 @@ export const useGameState = () => {
     const currentMatch = gameState.season.matches[gameState.season.currentMatch];
     const positionEvents = getEventsForPosition(gameState.player.position);
     
-    // Select 2 random events for this match
+    // Select 3-5 random events for this match
     const matchEvents = [];
     const usedEvents = new Set();
+    const totalEvents = 3 + Math.floor(Math.random() * 3);
     
-    while (matchEvents.length < 2) {
+    while (matchEvents.length < totalEvents) {
       const randomEvent = positionEvents[Math.floor(Math.random() * positionEvents.length)];
       if (!usedEvents.has(randomEvent.id)) {
         matchEvents.push({ ...randomEvent, resolved: false });
@@ -382,7 +395,11 @@ export const useGameState = () => {
   const resolveMatchEvent = useCallback((eventIndex: number, choiceIndex: number) => {
     if (!gameState.player || !gameState.lastMatchEvents[eventIndex]) return;
 
+    if (eventIndex !== gameState.currentEventIndex) return;
+
     const event = gameState.lastMatchEvents[eventIndex];
+    if (event.resolved) return;
+
     const player = gameState.player;
     const currentMatch = gameState.season.matches[gameState.season.currentMatch];
     const opponentTeam = currentMatch.opponentTeam;
@@ -425,15 +442,29 @@ export const useGameState = () => {
     // Calculate success rate based on player vs opponent stats
     const playerStrength = (playerStat1 + playerStat2) / 2;
     const opponentStrength = (opponentStat1 + opponentStat2) / 2;
-    const successRate = Math.max(10, Math.min(90, 50 + (playerStrength - opponentStrength) * 0.5));
-    
+    const baseSuccess = event.successRate(playerStat1, playerStat2);
+    const opponentAdjustment = (playerStrength - opponentStrength) * 0.3;
+    const choiceProfile = getChoiceProfile(choiceIndex, event.choices.length);
+    const successRate = Math.max(
+      10,
+      Math.min(95, baseSuccess + opponentAdjustment + choiceProfile.successBonus)
+    );
     const isSuccess = Math.random() * 100 < successRate;
+    const impactValue = (isSuccess ? event.impact.positive : event.impact.negative) * choiceProfile.impactMultiplier;
     
     // Update the specific event
     setGameState(prev => ({
       ...prev,
       lastMatchEvents: prev.lastMatchEvents.map((e, i) => 
-        i === eventIndex ? { ...e, resolved: true, success: isSuccess } : e
+        i === eventIndex
+          ? {
+              ...e,
+              resolved: true,
+              success: isSuccess,
+              choiceIndex,
+              impactValue
+            }
+          : e
       ),
       currentEventIndex: prev.currentEventIndex + 1
     }));
@@ -449,9 +480,11 @@ export const useGameState = () => {
 
     const currentMatch = gameState.season.matches[gameState.season.currentMatch];
     
-    // Calculate match result based on events and random factors
-    const eventSuccesses = gameState.lastMatchEvents.filter((e: any) => e.success).length;
-    const playerImpact = eventSuccesses * 0.5 + Math.random() * 0.5;
+    // Calculate match result based on decisions and random factors
+    const totalImpact = gameState.lastMatchEvents.reduce((sum, event) => sum + (event.impactValue ?? 0), 0);
+    const decisionImpact = totalImpact * 0.08;
+    const baseImpact = 0.4 + Math.random() * 0.4;
+    const playerImpact = Math.max(0, Math.min(1, baseImpact + decisionImpact));
     
     // Generate scores
     let playerScore = Math.floor(Math.random() * 3 + playerImpact);
@@ -469,6 +502,7 @@ export const useGameState = () => {
       completed: true
     };
 
+    const eventSuccesses = gameState.lastMatchEvents.filter((event) => event.success).length;
     const result = playerScore > opponentScore ? 'win' : playerScore < opponentScore ? 'loss' : 'draw';
     const reputationBoost = (result === 'win' ? 2 : result === 'draw' ? 1 : -1) + (eventSuccesses > 0 ? 1 : 0);
     const updatedReputation = Math.max(0, Math.min(100, gameState.player.stats.reputation + reputationBoost));
@@ -486,9 +520,9 @@ export const useGameState = () => {
 
     // Add goals/assists/clean sheets based on events and position
     if (gameState.player.position === 'Forward' && eventSuccesses > 0) {
-      updatedPlayer.goals += eventSuccesses;
+      updatedPlayer.goals += Math.min(eventSuccesses, playerScore);
     } else if (gameState.player.position === 'Midfielder' && eventSuccesses > 0) {
-      updatedPlayer.assists += Math.floor(eventSuccesses / 2);
+      updatedPlayer.assists += Math.min(Math.floor(eventSuccesses / 2), playerScore);
     } else if (gameState.player.position === 'Goalkeeper' && playerScore === 0) {
       updatedPlayer.cleanSheets += 1;
     } else if (gameState.player.position === 'Defender' && opponentScore === 0) {
