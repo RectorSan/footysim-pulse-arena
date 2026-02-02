@@ -520,9 +520,9 @@ export const useGameState = () => {
 
     // Add goals/assists/clean sheets based on events and position
     if (gameState.player.position === 'Forward' && eventSuccesses > 0) {
-      updatedPlayer.goals += eventSuccesses;
+      updatedPlayer.goals += Math.min(eventSuccesses, playerScore);
     } else if (gameState.player.position === 'Midfielder' && eventSuccesses > 0) {
-      updatedPlayer.assists += Math.floor(eventSuccesses / 2);
+      updatedPlayer.assists += Math.min(Math.floor(eventSuccesses / 2), playerScore);
     } else if (gameState.player.position === 'Goalkeeper' && playerScore === 0) {
       updatedPlayer.cleanSheets += 1;
     } else if (gameState.player.position === 'Defender' && opponentScore === 0) {
